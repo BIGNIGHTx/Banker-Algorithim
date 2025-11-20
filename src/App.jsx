@@ -60,6 +60,64 @@ export default function SafeStateChecker() {
     setResult(null); // ล้างผลลัพธ์เดิม
   };
 
+  // ฟังก์ชันสำหรับตรวจสอบควาวถูกต้องของข้อมูลที่กรอก
+  const validateInput = () => {
+    const errors = [];
+    
+    // เงื่อนไขที่ 1: Allocation[i][j] <= Max[i][j] สำหรับทุก Process และ Resource
+    // หมายความ: ทรัพยากรที่จัดสรรไปแล้วต้องไม่มากกว่าความต้องการสูงสุด
+    for (let i = 0; i < numProcesses; i++) {
+      for (let j = 0; j < numResources; j++) {
+        if (allocation[i][j] > max[i][j]) {
+          errors.push(`❌ Process P${i}: Allocation[${j}] (${allocation[i][j]}) > Max[${j}] (${max[i][j]})`);
+          errors.push(`   ➡️ ทรัพยากรที่จัดสรรไปต้องไม่เกินความต้องการสูงสุด`);
+        }
+      }
+    }
+    
+    // เงื่อนไขที่ 2: ผลรวม Allocation ของแต่ลเ Process + Available <= Total Resources
+    // หมายความ: ทรัพยากรทั้งหมดต้องเท่ากับที่ใช้ไปแล้ว + ที่เหลือ
+    for (let j = 0; j < numResources; j++) {
+      let totalAllocated = 0;
+      for (let i = 0; i < numProcesses; i++) {
+        totalAllocated += allocation[i][j];
+      }
+      const totalResources = totalAllocated + available[j];
+      
+      // ตรวจสอบว่า Max ของ Process ไหนก็ตามไม่เกิน Total Resources
+      for (let i = 0; i < numProcesses; i++) {
+        if (max[i][j] > totalResources) {
+          errors.push(`⚠️ Resource R${j}: Process P${i} ต้องการ Max (${max[i][j]}) > Total Resources (${totalResources})`);
+          errors.push(`   ➡️ ความต้องการสูงสุดเกินทรัพยากรที่มีในระบบ`);
+        }
+      }
+    }
+    
+    // เงื่อนไขที่ 3: Available >= 0 สำหรับทุก Resource
+    // หมายความ: ทรัพยากรที่เหลือต้องไม่ติดลบ
+    for (let j = 0; j < numResources; j++) {
+      if (available[j] < 0) {
+        errors.push(`❌ Resource R${j}: Available (${available[j]}) < 0`);
+        errors.push(`   ➡️ ทรัพยากรที่เหลือต้องไม่เป็นค่าลบ`);
+      }
+    }
+    
+    // เงื่อนไขที่ 4: Allocation >= 0 และ Max >= 0 สำหรับทุกค่า
+    // หมายความ: ค่าทั้งหมดต้องไม่เป็นค่าลบ
+    for (let i = 0; i < numProcesses; i++) {
+      for (let j = 0; j < numResources; j++) {
+        if (allocation[i][j] < 0) {
+          errors.push(`❌ Process P${i}: Allocation[${j}] (${allocation[i][j]}) < 0`);
+        }
+        if (max[i][j] < 0) {
+          errors.push(`❌ Process P${i}: Max[${j}] (${max[i][j]}) < 0`);
+        }
+      }
+    }
+    
+    return errors;
+  };
+
   // ฟังก์ชันคำนวณ Need Matrix (ความต้องการทรัพยากรที่เหลือของแต่ละ Process)
   // สูตร: Need[i][j] = Max[i][j] - Allocation[i][j]
   const calculateNeed = () => {
@@ -74,6 +132,22 @@ export default function SafeStateChecker() {
   // ฟังก์ชันหลักสำหรับตรวจสอบสถานะของระบบ (Safe หรือ Unsafe)
   // ใช้ Banker's Algorithm
   const checkSafeState = () => {
+    // ตรวจสอบความถูกต้องของข้อมูลก่อน
+    const validationErrors = validateInput();
+    
+    if (validationErrors.length > 0) {
+      // ถ้ามี error แสดงผลลัพธ์ error
+      setResult({
+        isSafe: false,
+        safeSequence: [],
+        need: calculateNeed(),
+        steps: [],
+        finalWork: [],
+        errors: validationErrors
+      });
+      return;
+    }
+    
     // Step 1: คำนวณ Need Matrix
     const need = calculateNeed();
     
@@ -406,9 +480,28 @@ export default function SafeStateChecker() {
         {/* แสดงเฉพาะเมื่อ result ไม่เป็น null (คำนวณแล้ว) */}
         {result && (
           <div className="result-container">
+            {/* แสดง Validation Errors ถ้ามี */}
+            {result.errors && result.errors.length > 0 && (
+              <div className="error-card">
+                <div className="error-header">
+                  <AlertCircle size={48} className="error-icon" />
+                  <div>
+                    <h2 className="error-title">พบข้อผิดพลาดในข้อมูล</h2>
+                    <p className="error-subtitle">กรุณาตรวจสอบและแก้ไขข้อมูลตามเงื่อนไข Banker's Algorithm</p>
+                  </div>
+                </div>
+                <div className="error-list">
+                  {result.errors.map((error, idx) => (
+                    <div key={idx} className="error-item">{error}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* การ์ดแสดงสถานะ Safe/Unsafe */}
             {/* ถ้า Safe: พื้นหลังเขียว, ถ้า Unsafe: พื้นหลังแดง */}
-            <div className={result.isSafe ? 'result-card-safe' : 'result-card-unsafe'}>
+            {!result.errors && (
+              <div className={result.isSafe ? 'result-card-safe' : 'result-card-unsafe'}>
               <div className="result-header">
                 {/* ถ้า Safe: แสดง CheckCircle icon สีเขียว */}
                 {result.isSafe ? (
@@ -454,8 +547,10 @@ export default function SafeStateChecker() {
                 </div>
               )}
             </div>
+            )}
 
             {/* ตารางแสดง Need Matrix */}
+            {!result.errors && (
             <div className="card">
               <h3 className="section-title section-title-need">Need Matrix (Max - Allocation)</h3>
               <div className="table-wrapper">
@@ -484,9 +579,10 @@ export default function SafeStateChecker() {
                 </table>
               </div>
             </div>
+            )}
 
             {/* แสดงขั้นตอนการคำนวณ (เฉพาะเมื่อระบบ Safe และมีขั้นตอน) */}
-            {result.isSafe && result.steps.length > 0 && (
+            {!result.errors && result.isSafe && result.steps.length > 0 && (
               <div className="card">
                 <h3 className="section-title">ขั้นตอนการคำนวณ</h3>
                 <div className="steps-container">
