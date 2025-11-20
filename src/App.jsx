@@ -1,7 +1,7 @@
 // Import React และ useState hook สำหรับจัดการ state
 import React, { useState } from 'react';
 // Import icons จาก lucide-react สำหรับแสดงสัญลักษณ์ต่างๆ
-import { AlertCircle, CheckCircle, XCircle, Calculator, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle, XCircle, Calculator, RefreshCw, ArrowRight } from 'lucide-react';
 // Import CSS
 import './App.css';
 
@@ -255,6 +255,7 @@ export default function SafeStateChecker() {
               className="btn-primary"
             >
               ถัดไป
+              <ArrowRight size={22} />
             </button>
           </div>
         )}
